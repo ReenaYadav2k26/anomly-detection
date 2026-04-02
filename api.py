@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import pandas as pd
 import joblib
 import shap
+import os
 
 app = Flask(__name__)
 
@@ -51,12 +52,14 @@ def predict_invoice():
         pred = model.predict(X)[0]
         score = model.decision_function(X)[0]
 
-        # SHAP explanation
-        shap_values = explainer(X)
-        shap_dict = dict(zip(features, shap_values.values[0]))
-
-        # Top reason
-        top_reason = max(shap_dict, key=lambda k: abs(shap_dict[k]))
+        # Run SHAP only for anomalies (VERY IMPORTANT)
+        if pred == -1:
+            shap_values = explainer(X)
+            shap_dict = dict(zip(features, shap_values.values[0]))
+            top_reason = max(shap_dict, key=lambda k: abs(shap_dict[k]))
+        else:
+            shap_dict = {}
+            top_reason = "normal"
 
         # Reason description
         reason_map = {
@@ -66,7 +69,8 @@ def predict_invoice():
             "usage_rate": "Usage rate abnormal",
             "charge_diff": "Difference between debit and expected charge high",
             "duration_days": "Billing duration unusual",
-            "proration_remaining_days": "Proration days unusual"
+            "proration_remaining_days": "Proration days unusual",
+            "normal": "No anomaly detected"
         }
 
         reason_description = reason_map.get(top_reason, "Unknown reason")
@@ -86,8 +90,6 @@ def predict_invoice():
 
     except Exception as e:
         return jsonify({"error": str(e)})
-
-import os
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
